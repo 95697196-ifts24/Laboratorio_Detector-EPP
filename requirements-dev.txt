@@ -1,0 +1,9 @@
+# Dependencias para desarrollar y explorar en el cuaderno (playground)
+# Instalación:
+#   uv pip install -r requirements-dev.txt
+
+# Incluye todo lo que necesita la app
+-r requirements.txt
+
+# Permite que VS Code ejecute cuadernos .ipynb con el Python de .venv
+ipykernel

@@ -1,0 +1,12 @@
+# Detector de EPP (casco) para obras
+# Instalación:
+#   uv pip install -r requirements.txt
+
+# Modelo de detección YOLO (también instala torch, opencv, pillow y numpy)
+ultralytics
+
+# Descarga de los pesos del modelo desde Hugging Face
+huggingface_hub
+
+# Interfaz para cargar fotos desde el navegador
+gradio

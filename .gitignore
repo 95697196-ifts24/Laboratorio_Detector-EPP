@@ -1,0 +1,14 @@
+# Entorno virtual de uv (cada uno lo crea con: uv venv)
+.venv/
+
+# Archivos temporales de Python y Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Archivos que genera Gradio
+.gradio/
+flagged/
+
+# Pesos de modelos (se descargan solos desde Hugging Face)
+*.pt
