@@ -4,6 +4,12 @@ App web que analiza fotos de obras en construcción y marca qué personas usan *
 
 Laboratorio Práctico Obligatorio · Técnicas de Procesamiento Digital de Imágenes · IFTS N.º 24 · 2026
 
+**Autor:** José J. Navas A.
+
+### 👉 [Probar la app en línea](https://huggingface.co/spaces/jose-navas-ai/detector-epp)
+
+La versión en línea ejecuta el modelo **en el navegador**: la foto no se envía a ningún servidor.
+
 ![Resultado de la app sobre una foto de prueba](pruebas/resultados/foto1_imgsz1280.jpg)
 
 ## El problema
@@ -59,6 +65,18 @@ La app permite ajustar dos parámetros:
 
 > **Usuarios de Windows con antivirus Avast:** si Python se cierra con `OPENSSL_Uplink ... no OPENSSL_Applink`, el problema es la variable `SSLKEYLOGFILE`. La app ya la borra al iniciar. Ver [PLAN.md](PLAN.md), problema 2.
 
+## Versión web (Hugging Face Spaces)
+
+Hugging Face cobra la suscripción PRO para alojar apps de Gradio, pero los Spaces **estáticos** (páginas HTML) son gratuitos. Por eso la versión en línea es una página aparte, [web/index.html](web/index.html), que repite la lógica de `app.py` en JavaScript:
+
+1. `exportar_onnx.py` convierte el modelo al formato **ONNX** (`web/modelo.onnx`).
+2. La página lo ejecuta con [ONNX Runtime Web](https://onnxruntime.ai/), achica la foto igual que YOLO, elimina las cajas repetidas (NMS) y calcula el cumplimiento.
+3. `publicar_space.py` sube la carpeta `web/` y la ficha `hf_space/README.md` al Space.
+
+Los resultados coinciden con los de `app.py`. Puede haber diferencias mínimas en detecciones cercanas al umbral, porque el navegador achica la imagen con otro método.
+
+Para probarla en la computadora: `python -m http.server --directory web` y abrir `http://localhost:8000`.
+
 ## Estructura del proyecto
 
 | Archivo | Contenido |
@@ -67,6 +85,9 @@ La app permite ajustar dos parámetros:
 | `evaluar.py` | Analiza todas las fotos de `pruebas/` y arma la tabla de resultados |
 | `playground.ipynb` | Cuaderno de exploración paso a paso |
 | `pruebas/` | Fotos de prueba, sus fuentes (`fuentes.md`) y los resultados marcados |
+| `web/` | Versión web: página, modelo ONNX y fotos de ejemplo |
+| `exportar_onnx.py` | Convierte el modelo a ONNX para la versión web |
+| `publicar_space.py` y `hf_space/` | Publican la versión web en Hugging Face Spaces |
 | `PLAN.md` | Plan del proyecto, decisiones y registro de problemas |
 
 ## Resultados de las pruebas

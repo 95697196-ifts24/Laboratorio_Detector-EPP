@@ -1,6 +1,7 @@
 # Plan del proyecto: Detector de EPP para obras
 
 Laboratorio Práctico Obligatorio · Procesamiento Digital de Imágenes · IFTS N.º 24
+Autor: José J. Navas A.
 Fecha de planificación: 17/11/2026
 
 > Este plan se definió con un agente que actuó como mentor de desarrollo de productos digitales. El agente hizo una pregunta por vez y no escribió código durante la planificación.
@@ -122,6 +123,7 @@ Entre 15 y 20 fotos de **Pexels o Unsplash** (licencia libre), registrando la fu
 | 10 | Umbral de confianza ajustable en la app (inicial 0,25) | No hay un valor que funcione bien en todas las fotos |
 | 11 | La app muestra un aviso de que el resultado puede fallar | El modelo da falsos "con casco" (hallazgo 5): el encargado debe revisar la foto |
 | 12 | Script `evaluar.py` para la fase 6 | Analiza todas las fotos de prueba de una vez y arma la tabla de resultados |
+| 13 | Publicar una versión web estática (ONNX en el navegador) en lugar de la app de Gradio | Hugging Face exige PRO para Spaces con Gradio. El Space estático es gratis y, además, las fotos no salen de la computadora del usuario |
 
 ## 8. Registro de problemas y soluciones
 
@@ -131,5 +133,8 @@ Entre 15 y 20 fotos de **Pexels o Unsplash** (licencia libre), registrando la fu
 | 2 | `import gradio` cierra Python con `OPENSSL_Uplink ... no OPENSSL_Applink` | El antivirus Avast inyecta la variable `SSLKEYLOGFILE` para inspeccionar el tráfico HTTPS, y el módulo `ssl` de Python falla al usarla | Borrar la variable antes de importar: `$env:SSLKEYLOGFILE = $null` en la terminal, u `os.environ.pop("SSLKEYLOGFILE", None)` al inicio del código |
 | 3 | La foto 1 tiene 4 cascos y el modelo detecta 3 | La foto mide 5754 px y YOLO la achica a 640: el casco del fondo, tapado a medias, queda en unos 24 × 31 px y sale con confianza 8 % | Analizar con `imgsz=1280` (confianza 54 %). Bajar el umbral no sirve: aparecen cajas repetidas |
 | 4 | Las celdas agregadas al cuaderno desaparecieron | VS Code tenía el cuaderno abierto y, al guardar, escribió encima su versión vieja | Antes de guardar, recargar el archivo con "File: Revert File" si se modificó desde afuera |
+| 5 | Publicar el Space con Gradio da `402 Payment Required` | Hugging Face ahora exige la suscripción PRO para Spaces con Gradio o Docker | Versión web estática: modelo en ONNX ejecutado en el navegador (decisión 13) |
+| 6 | `uv pip install` falla con `invalid peer certificate: UnknownIssuer` | Avast intercepta el HTTPS con su propio certificado | Agregar `--system-certs` al comando de uv |
+| 7 | La versión web daba cajas de más | Se usó IoU 0,7 para eliminar cajas repetidas (NMS), pero Ultralytics usa 0,5 | Usar `IOU_NMS = 0.5`, verificado comparando contra Ultralytics |
 
 **Entorno verificado:** Python 3.12.13 · ultralytics 8.4.215 · torch 2.15.0+cpu · gradio 6.32.0 · huggingface_hub 2.4.0 · opencv 5.1.0.

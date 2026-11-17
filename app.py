@@ -4,6 +4,8 @@ App web hecha con Gradio: el encargado de Seguridad e Higiene sube una foto
 y recibe la foto marcada (verde: con casco, rojo: sin casco) y un resumen
 con el porcentaje de cumplimiento.
 
+Autor: José J. Navas A. · IFTS N.º 24 · 2026
+
 Ejecución:
     python app.py
 """
@@ -177,6 +179,14 @@ with gr.Blocks(title="Detector de EPP") as app:
         ],
         inputs=[entrada],
         label="Fotos de ejemplo",
+    )
+
+    gr.Markdown(
+        "---\n"
+        "Hecho por **José J. Navas A.** · Laboratorio Práctico · "
+        "Técnicas de Procesamiento Digital de Imágenes · IFTS N.º 24 · 2026 · "
+        "Modelo: [keremberke/yolov8n-hard-hat-detection]"
+        "(https://huggingface.co/keremberke/yolov8n-hard-hat-detection)"
     )
 
     boton.click(analizar, inputs=[entrada, conf, imgsz], outputs=[salida_foto, salida_resumen])

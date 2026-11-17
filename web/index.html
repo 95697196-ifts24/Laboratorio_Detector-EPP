@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detector de EPP · Casco</title>
+<meta name="description" content="Detecta cascos en fotos de obras y calcula el porcentaje de cumplimiento. Funciona en el navegador.">
+<meta name="author" content="José J. Navas A.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👷</text></svg>">
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --text: #1d1d1b; --muted: #66645e; --line: #e2e0da;
+    --accent: #e8a200; --accent-text: #1d1d1b; --ok: #00a000; --bad: #dc0000;
+    --warn-bg: #fff6dc; --warn-line: #f0d48a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161614; --panel: #22221f; --text: #ecebe6; --muted: #a3a19a; --line: #3a3934;
+      --warn-bg: #3a3218; --warn-line: #6b5a24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 1.7rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  label.titulo { display: block; font-weight: 600; margin: 16px 0 4px; }
+  label.titulo:first-child { margin-top: 0; }
+  .ayuda { color: var(--muted); font-size: .85rem; margin: 2px 0 0; }
+  .subir {
+    display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 18px;
+    text-align: center; cursor: pointer; color: var(--muted);
+  }
+  .subir:hover, .subir.encima { border-color: var(--accent); color: var(--text); }
+  .subir input { display: none; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .radios { display: flex; gap: 16px; }
+  .radios label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  button {
+    width: 100%; margin-top: 18px; padding: 12px; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: 1rem; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .ejemplos { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 6px; }
+  .ejemplos button {
+    margin: 0; padding: 0; background: none; border: 2px solid transparent; border-radius: 8px; overflow: hidden;
+    color: var(--text); font-weight: 400; font-size: .75rem; text-align: center;
+  }
+  .ejemplos button:hover { border-color: var(--accent); }
+  .ejemplos img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+  #lienzo { width: 100%; height: auto; border-radius: 8px; display: none; background: var(--line); }
+  .vacio { color: var(--muted); text-align: center; padding: 80px 16px; }
+  #estado { color: var(--muted); font-size: .9rem; min-height: 1.5em; margin: 10px 0 0; }
+  .cumplimiento { font-size: 1.6rem; font-weight: 700; margin: 16px 0 8px; }
+  table { border-collapse: collapse; width: 100%; max-width: 480px; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: center; }
+  th { font-weight: 600; font-size: .9rem; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .aviso { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; padding: 10px 12px; margin-top: 14px; font-size: .9rem; }
+  footer { color: var(--muted); font-size: .85rem; margin-top: 28px; border-top: 1px solid var(--line); padding-top: 14px; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Detector de EPP · Casco</h1>
+  <p class="sub">Subí una foto de la obra y la app marca las cabezas <strong class="ok">con casco (verde)</strong> y
+    <strong class="bad">sin casco (rojo)</strong>, y calcula el porcentaje de cumplimiento.
+    El análisis se hace <strong>en tu navegador</strong>: la foto no se envía a ningún servidor.</p>
+
+  <div class="grid">
+    <!-- Columna izquierda: entrada y controles -->
+    <section class="panel">
+      <label class="titulo">Foto de la obra</label>
+      <label class="subir" id="zona">
+        <input type="file" id="archivo" accept="image/*">
+        Tocá para elegir una foto<br><small>o arrastrala acá</small>
+      </label>
+
+      <label class="titulo" for="conf">Umbral de confianza: <span id="confValor">0,25</span></label>
+      <input type="range" id="conf" min="0.05" max="0.95" step="0.05" value="0.25">
+      <p class="ayuda">Más bajo: encuentra más cabezas, pero con más errores.</p>
+
+      <label class="titulo">Tamaño de análisis (píxeles)</label>
+      <div class="radios">
+        <label><input type="radio" name="imgsz" value="640"> 640</label>
+        <label><input type="radio" name="imgsz" value="1280" checked> 1280</label>
+      </div>
+      <p class="ayuda">1280 ayuda con personas lejanas, pero es más lento.</p>
+
+      <button id="analizar" disabled>Analizar</button>
+      <p id="estado">Cargando el modelo…</p>
+
+      <label class="titulo">Fotos de ejemplo</label>
+      <div class="ejemplos" id="ejemplos"></div>
+    </section>
+
+    <!-- Columna derecha: resultado -->
+    <section class="panel">
+      <div class="vacio" id="vacio">El resultado aparece acá.</div>
+      <canvas id="lienzo"></canvas>
+      <div id="resumen"></div>
+    </section>
+  </div>
+
+  <footer>
+    Hecho por <strong>José J. Navas A.</strong> · Laboratorio Práctico · Técnicas de Procesamiento Digital de Imágenes · IFTS N.º 24 · 2026<br>
+    Modelo: <a href="https://huggingface.co/keremberke/yolov8n-hard-hat-detection">keremberke/yolov8n-hard-hat-detection</a> (YOLOv8 nano, convertido a ONNX) ·
+    Código y pruebas: <a href="https://github.com/95697196-ifts24/Laboratorio_Detector-EPP">GitHub</a> ·
+    Fotos de ejemplo: <a href="https://www.pexels.com/">Pexels</a>
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// 1. Configuración (igual que app.py)
+// ---------------------------------------------------------------------------
+const CLASES  = ["Hardhat", "NO-Hardhat"];                       // orden del modelo
+const NOMBRES = { "Hardhat": "Con casco", "NO-Hardhat": "Sin casco" };
+const COLORES = { "Hardhat": "rgb(0,170,0)", "NO-Hardhat": "rgb(220,0,0)" };
+const IOU_NMS = 0.5;           // el mismo valor que usa Ultralytics para eliminar cajas repetidas
+const ANCHO_MAXIMO = 1600;     // tamaño máximo de la foto marcada en pantalla
+const EJEMPLOS = [
+  ["obra-grupo.jpg",       "Caso ideal"],
+  ["panuelo.jpg",          "Pañuelo"],
+  ["casco-en-mano.jpg",    "Casco en la mano"],
+  ["multitud-gorras.jpg",  "Multitud con gorras"],
+  ["peaton-lejano.jpg",    "Peatón lejano"],
+];
+
+const $ = (id) => document.getElementById(id);
+let sesion = null;   // el modelo cargado
+let foto = null;     // la foto actual (ImageBitmap)
+
+// ---------------------------------------------------------------------------
+// 2. Cargar el modelo
+// ---------------------------------------------------------------------------
+async function cargarModelo() {
+  try {
+    sesion = await ort.InferenceSession.create("modelo.onnx", { executionProviders: ["wasm"] });
+    $("estado").textContent = "Modelo listo. Elegí una foto.";
+    if (foto) $("analizar").disabled = false;
+  } catch (e) {
+    $("estado").textContent = "No se pudo cargar el modelo: " + e.message;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. Preprocesar: achicar la foto como lo hace YOLO (letterbox)
+// ---------------------------------------------------------------------------
+function preparar(img, imgsz) {
+  const r = Math.min(imgsz / img.width, imgsz / img.height);
+  const nw = Math.round(img.width * r), nh = Math.round(img.height * r);
+  // El modelo pide medidas múltiplos de 32: completamos con gris (114)
+  const pw = nw + ((32 - nw % 32) % 32), ph = nh + ((32 - nh % 32) % 32);
+  const izq = Math.floor((pw - nw) / 2), arriba = Math.floor((ph - nh) / 2);
+
+  const c = document.createElement("canvas");
+  c.width = pw; c.height = ph;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "rgb(114,114,114)";
+  ctx.fillRect(0, 0, pw, ph);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, izq, arriba, nw, nh);
+
+  // Pasamos de píxeles RGBA (0-255) a tres planos R, G, B (0-1), el formato que espera el modelo
+  const rgba = ctx.getImageData(0, 0, pw, ph).data;
+  const n = pw * ph, datos = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++) {
+    datos[i]         = rgba[i * 4]     / 255;
+    datos[i + n]     = rgba[i * 4 + 1] / 255;
+    datos[i + 2 * n] = rgba[i * 4 + 2] / 255;
+  }
+  return { tensor: new ort.Tensor("float32", datos, [1, 3, ph, pw]), r, izq, arriba };
+}
+
+// ---------------------------------------------------------------------------
+// 4. Posprocesar: de la salida del modelo a una lista de detecciones
+// ---------------------------------------------------------------------------
+function iou(a, b) {
+  const x1 = Math.max(a.caja[0], b.caja[0]), y1 = Math.max(a.caja[1], b.caja[1]);
+  const x2 = Math.min(a.caja[2], b.caja[2]), y2 = Math.min(a.caja[3], b.caja[3]);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const area = (d) => (d.caja[2] - d.caja[0]) * (d.caja[3] - d.caja[1]);
+  return inter / (area(a) + area(b) - inter + 1e-9);
+}
+
+function leerDetecciones(salida, conf, prep) {
+  // salida: [1, 6, N] → por cada candidato: cx, cy, ancho, alto, puntaje casco, puntaje sin casco
+  const [, filas, n] = salida.dims, v = salida.data;
+  const candidatos = [];
+  for (let k = 0; k < n; k++) {
+    let mejor = 0;
+    for (let c = 1; c < filas - 4; c++) if (v[(4 + c) * n + k] > v[(4 + mejor) * n + k]) mejor = c;
+    const confianza = v[(4 + mejor) * n + k];
+    if (confianza <= conf) continue;
+    const cx = v[k], cy = v[n + k], w = v[2 * n + k], h = v[3 * n + k];
+    candidatos.push({
+      clase: CLASES[mejor], confianza,
+      // Volvemos a las coordenadas de la foto original
+      caja: [(cx - w / 2 - prep.izq) / prep.r, (cy - h / 2 - prep.arriba) / prep.r,
+             (cx + w / 2 - prep.izq) / prep.r, (cy + h / 2 - prep.arriba) / prep.r],
+    });
+  }
+  // NMS: si dos cajas de la misma clase se superponen mucho, nos quedamos con la más segura
+  candidatos.sort((a, b) => b.confianza - a.confianza);
+  const elegidas = [];
+  for (const d of candidatos) {
+    if (elegidas.every((e) => e.clase !== d.clase || iou(e, d) <= IOU_NMS)) elegidas.push(d);
+  }
+  return elegidas;
+}
+
+// ---------------------------------------------------------------------------
+// 5. Lógica propia: contar y calcular el cumplimiento (igual que app.py)
+// ---------------------------------------------------------------------------
+function contar(detecciones) {
+  const con = detecciones.filter((d) => d.clase === "Hardhat").length;
+  const sin = detecciones.filter((d) => d.clase === "NO-Hardhat").length;
+  const cabezas = con + sin;
+  return { cabezas, con, sin, cumplimiento: cabezas > 0 ? (con / cabezas) * 100 : null };
+}
+
+// ---------------------------------------------------------------------------
+// 6. Presentación: dibujar las cajas y escribir el resumen
+// ---------------------------------------------------------------------------
+function dibujar(img, detecciones) {
+  const escala = Math.min(1, ANCHO_MAXIMO / Math.max(img.width, img.height));
+  const c = $("lienzo");
+  c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+  const ctx = c.getContext("2d");
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+
+  const grosor = Math.max(3, Math.round(c.width / 300));
+  const tamLetra = Math.max(14, Math.round(c.width / 60));
+  ctx.font = `600 ${tamLetra}px system-ui, sans-serif`;
+  ctx.textBaseline = "bottom";
+
+  for (const d of detecciones) {
+    const [x1, y1, x2, y2] = d.caja.map((z) => z * escala);
+    const texto = `${NOMBRES[d.clase]} ${Math.round(d.confianza * 100)}%`;
+    ctx.strokeStyle = ctx.fillStyle = COLORES[d.clase];
+    ctx.lineWidth = grosor;
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    const ancho = ctx.measureText(texto).width;
+    const yTexto = Math.max(tamLetra + 4, y1);
+    ctx.fillRect(x1 - grosor / 2, yTexto - tamLetra - 4, ancho + 10, tamLetra + 4);
+    ctx.fillStyle = "white";
+    ctx.fillText(texto, x1 + 4, yTexto - 1);
+  }
+  c.style.display = "block";
+  $("vacio").style.display = "none";
+}
+
+function escribirResumen(cuenta) {
+  if (cuenta.cabezas === 0) {
+    $("resumen").innerHTML = '<p class="cumplimiento">No se detectaron cabezas</p>' +
+      "<p>Probá bajar el umbral de confianza o subir otra foto.</p>";
+    return;
+  }
+  let html = `<p class="cumplimiento">Cumplimiento: ${Math.round(cuenta.cumplimiento)} %</p>
+    <table><tr><th>Cabezas detectadas</th><th>Con casco</th><th>Sin casco</th></tr>
+    <tr><td>${cuenta.cabezas}</td><td class="ok">${cuenta.con}</td><td class="bad">${cuenta.sin}</td></tr></table>`;
+  if (cuenta.sin > 0) {
+    html += `<p class="bad"><strong>⚠️ Hay ${cuenta.sin} persona(s) sin casco.</strong> Están marcadas en rojo.</p>`;
+  }
+  html += `<div class="aviso">El modelo cuenta <strong>cabezas</strong>, no personas, y puede equivocarse:
+    confunde gorras, pañuelos o cabezas descubiertas con cascos y no ve cabezas tapadas o lejanas.
+    Revisá la foto antes de tomar decisiones.</div>`;
+  $("resumen").innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// 7. Función principal: se ejecuta al tocar "Analizar"
+// ---------------------------------------------------------------------------
+async function analizar() {
+  if (!sesion || !foto) return;
+  const conf = parseFloat($("conf").value);
+  const imgsz = parseInt(document.querySelector("input[name=imgsz]:checked").value, 10);
+
+  $("analizar").disabled = true;
+  $("estado").textContent = "Analizando…";
+  await new Promise((r) => setTimeout(r, 30));   // deja que la pantalla muestre el mensaje
+
+  const inicio = performance.now();
+  const prep = preparar(foto, imgsz);
+  const salida = (await sesion.run({ images: prep.tensor })).output0;
+  const detecciones = leerDetecciones(salida, conf, prep);
+
+  dibujar(foto, detecciones);
+  escribirResumen(contar(detecciones));
+  $("estado").textContent = `Listo en ${((performance.now() - inicio) / 1000).toFixed(1)} s.`;
+  $("analizar").disabled = false;
+  window.ultimoResultado = detecciones;   // para pruebas automáticas
+}
+
+async function usarFoto(blob) {
+  // createImageBitmap aplica la rotación guardada por el celular (EXIF)
+  foto = await createImageBitmap(blob, { imageOrientation: "from-image" });
+  if (sesion) analizar(); else $("estado").textContent = "Esperando que cargue el modelo…";
+}
+
+// ---------------------------------------------------------------------------
+// 8. Conectar la interfaz
+// ---------------------------------------------------------------------------
+$("conf").addEventListener("input", (e) => {
+  $("confValor").textContent = Number(e.target.value).toFixed(2).replace(".", ",");
+});
+$("analizar").addEventListener("click", analizar);
+// Al soltar el control o cambiar el tamaño, se vuelve a analizar la foto actual
+$("conf").addEventListener("change", analizar);
+document.querySelectorAll("input[name=imgsz]").forEach((r) => r.addEventListener("change", analizar));
+$("archivo").addEventListener("change", (e) => { if (e.target.files[0]) usarFoto(e.target.files[0]); });
+
+const zona = $("zona");
+zona.addEventListener("dragover", (e) => { e.preventDefault(); zona.classList.add("encima"); });
+zona.addEventListener("dragleave", () => zona.classList.remove("encima"));
+zona.addEventListener("drop", (e) => {
+  e.preventDefault(); zona.classList.remove("encima");
+  if (e.dataTransfer.files[0]) usarFoto(e.dataTransfer.files[0]);
+});
+
+for (const [archivo, nombre] of EJEMPLOS) {
+  const b = document.createElement("button");
+  b.innerHTML = `<img src="ejemplos/${archivo}" alt="${nombre}" loading="lazy">${nombre}`;
+  b.addEventListener("click", async () => usarFoto(await (await fetch("ejemplos/" + archivo)).blob()));
+  $("ejemplos").appendChild(b);
+}
+
+// Prueba automática: index.html?ejemplo=obra-grupo.jpg analiza esa foto al abrir
+cargarModelo().then(async () => {
+  const ej = new URLSearchParams(location.search).get("ejemplo");
+  if (ej) await usarFoto(await (await fetch("ejemplos/" + ej)).blob());
+});
+</script>
+</body>
+</html>

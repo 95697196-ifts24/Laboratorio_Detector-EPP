@@ -7,3 +7,8 @@
 
 # Permite que VS Code ejecute cuadernos .ipynb con el Python de .venv
 ipykernel
+
+# Para convertir el modelo a ONNX (exportar_onnx.py, versión web)
+onnx
+onnxslim
+onnxruntime
