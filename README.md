@@ -71,17 +71,29 @@ La app permite ajustar dos parámetros:
 
 ## Resultados de las pruebas
 
-El detalle de cada foto está en [pruebas/fuentes.md](pruebas/fuentes.md).
+Se probaron **17 fotos** de Pexels que cubren distintos casos: de frente, de espaldas, a contraluz, en blanco y negro, personas lejanas, multitudes, gorras y un casco en la mano. El detalle de cada foto está en [pruebas/fuentes.md](pruebas/fuentes.md).
 
-| Foto | Realidad | Modelo (`imgsz=1280`) | Observación |
-|---|---|---|---|
-| foto1 | 4 con casco | 4 con casco | Con 640 se pierde el casco del obrero del fondo |
-| foto2 | 5 con casco · 2 sin casco | 7 con casco | Marca una cabeza descubierta y un pañuelo blanco como "con casco" |
+| | `imgsz=640` | `imgsz=1280` |
+|---|:---:|:---:|
+| Fotos con conteo exacto | 8 de 17 | 8 de 17 |
+| Cabezas sin casco detectadas correctamente | 2 | 4 |
+| Fotos donde se pierde algún casco | 5 | 5 |
+| Fotos con algún falso "con casco" | 3 | 4 |
+
+**Funciona bien** con pocas personas y cascos visibles: de frente, de perfil, de espaldas, a contraluz, en blanco y negro y con cascos de cualquier color.
+
+**Falla** en estos casos:
+
+| Caso | Ejemplo |
+|---|---|
+| Gorras, pañuelos y cabezas descubiertas marcadas como "con casco" | En una multitud informa 88 % de cumplimiento cuando el real es menor a 50 % |
+| Cascos tapados, cascos vistos desde arriba y personas agachadas | No los detecta |
+| Casco en la mano | Lo cuenta como "con casco": el modelo detecta el objeto, no si la persona lo tiene puesto |
 
 ## Límites conocidos
 
-- **El cumplimiento puede salir más alto que el real.** El modelo casi nunca usa la clase "sin casco": confunde cabezas descubiertas y pañuelos claros con cascos. Por eso la app avisa que hay que revisar la foto.
-- **Personas lejanas o tapadas:** con fotos grandes, conviene analizar a 1280 px.
+- **El cumplimiento sale más alto que el real.** El modelo casi nunca usa la clase "sin casco": confunde gorras, pañuelos y cabezas descubiertas con cascos. Por eso la app avisa que hay que revisar la foto.
+- **Ningún tamaño de análisis es mejor en todo.** Con 1280 se ven mejor las personas lejanas y las cabezas sin casco, pero el modelo falla con cascos muy grandes y agrega cajas de más.
 - **Datos de prueba:** se usaron fotos de bancos libres (Pexels), no fotos reales de obras argentinas.
 - **Modelo chico y sin mantenimiento:** es la versión *nano* de YOLOv8 y se publicó hace más de 3 años. Su precisión declarada (mAP50 = 0,836) la midió el propio autor.
 

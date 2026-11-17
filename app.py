@@ -169,7 +169,12 @@ with gr.Blocks(title="Detector de EPP") as app:
             salida_resumen = gr.Markdown()
 
     gr.Examples(
-        examples=[["pruebas/foto1.jpg"], ["pruebas/foto2.jpg"]],
+        examples=[
+            ["pruebas/foto1.jpg"],                                       # caso ideal
+            ["pruebas/foto2.jpg"],                                       # pañuelo y cabeza descubierta
+            ["pruebas/pexels-dongfang-xiaowu-112541598-33982049.jpg"],   # casco en la mano
+            ["pruebas/pexels-ozkanoztas-38043248.jpg"],                  # multitud con gorras
+        ],
         inputs=[entrada],
         label="Fotos de ejemplo",
     )

@@ -62,6 +62,15 @@ Fecha de planificación: 17/11/2026
 4. **El tamaño de análisis importa.** YOLO achica la foto a 640 px (el tamaño de entrenamiento). En fotos grandes, los cascos lejanos o tapados quedan en unos 25 px y el modelo no los ve. Con `imgsz=1280` se detectan, pero bajan las confianzas de los cascos grandes. Detalle en `playground.ipynb`, Paso 6.
 5. **El modelo casi nunca dice "sin casco".** En la foto 2 marca como "con casco" una cabeza descubierta y un pañuelo blanco, y no asigna `NO-Hardhat` ni con un umbral de 2 %. Consecuencia: **el % de cumplimiento tiende a salir más alto que el real**. Es el límite más importante para el usuario.
 
+## 3 quater. Resultados de la fase 6 (17/11/2026)
+
+Se probaron 17 fotos de Pexels. El detalle está en `pruebas/fuentes.md`.
+
+6. **Conteo exacto en 8 de 17 fotos**, tanto con 640 como con 1280, aunque las fallas son distintas en cada caso.
+7. **Gorras confundidas con cascos:** se confirma la sospecha del hallazgo 2. En una multitud, el modelo informa 88 % de cumplimiento cuando el real es menor a 50 %.
+8. **Casco en la mano contado como "con casco":** el modelo detecta el objeto, no si la persona lo tiene puesto.
+9. **1280 detecta más cabezas sin casco** (4 contra 2). Esto respalda la decisión 9.
+
 ## 4. Cómo construir la primera versión mínima (MVP)
 
 | Fase | Qué hacemos | Qué aprendo |
