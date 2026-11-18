@@ -36,9 +36,17 @@ Los conteos marcados con "≈" son aproximados: en las multitudes hay cabezas ta
 
 ## Resumen
 
+| | `imgsz=640` | `imgsz=1280` | Combinado (640 + 1280) |
+|---|:---:|:---:|:---:|
+| Fotos con conteo exacto | 8 de 17 | 8 de 17 | **10 de 17** |
+| Error total del conteo (suma de diferencias con la realidad) | 29 | 26 | **24** |
+
+El modo **combinado** analiza la foto con los dos tamaños, une las detecciones y, si dos cajas marcan la misma cabeza, deja solo la más segura. Es el modo por defecto de la app desde el 18/11/2026. No corrige las gorras, los pañuelos ni el casco en la mano: para el modelo, esos objetos son cascos.
+
+Detalle de los dos tamaños por separado:
+
 | | `imgsz=640` | `imgsz=1280` |
 |---|:---:|:---:|
-| Fotos con conteo exacto | 8 de 17 | 8 de 17 |
 | Cabezas sin casco detectadas correctamente | 2 (las dos en la foto 15) | 4 (fotos 6, 12 y 15) |
 | Fotos donde se pierde algún casco (sin contar la 15) | 5 | 5 |
 | Fotos con algún falso "con casco" | 3 | 4 |

@@ -61,7 +61,7 @@ La app permite ajustar dos parámetros:
 | Parámetro | Valor inicial | Para qué sirve |
 |---|---|---|
 | Umbral de confianza | 0,25 | Más bajo: encuentra más cabezas, pero con más errores |
-| Tamaño de análisis | 1280 px | YOLO achica la foto a este tamaño antes de analizarla. 1280 detecta personas lejanas; 640 es más rápido |
+| Tamaño de análisis | Combinado | YOLO achica la foto a este tamaño antes de analizarla. 1280 detecta personas lejanas; 640 es más rápido; combinado usa los dos y es el más preciso |
 
 > **Usuarios de Windows con antivirus Avast:** si Python se cierra con `OPENSSL_Uplink ... no OPENSSL_Applink`, el problema es la variable `SSLKEYLOGFILE`. La app ya la borra al iniciar. Ver [PLAN.md](PLAN.md), problema 2.
 
@@ -94,12 +94,12 @@ Para probarla en la computadora: `python -m http.server --directory web` y abrir
 
 Se probaron **17 fotos** de Pexels que cubren distintos casos: de frente, de espaldas, a contraluz, en blanco y negro, personas lejanas, multitudes, gorras y un casco en la mano. El detalle de cada foto está en [pruebas/fuentes.md](pruebas/fuentes.md).
 
-| | `imgsz=640` | `imgsz=1280` |
-|---|:---:|:---:|
-| Fotos con conteo exacto | 8 de 17 | 8 de 17 |
-| Cabezas sin casco detectadas correctamente | 2 | 4 |
-| Fotos donde se pierde algún casco | 5 | 5 |
-| Fotos con algún falso "con casco" | 3 | 4 |
+| | `imgsz=640` | `imgsz=1280` | **Combinado** (por defecto) |
+|---|:---:|:---:|:---:|
+| Fotos con conteo exacto | 8 de 17 | 8 de 17 | **10 de 17** |
+| Error total del conteo | 29 | 26 | **24** |
+
+El modo **combinado** analiza la foto con 640 y con 1280, une las detecciones y elimina las cajas repetidas sobre la misma cabeza.
 
 **Funciona bien** con pocas personas y cascos visibles: de frente, de perfil, de espaldas, a contraluz, en blanco y negro y con cascos de cualquier color.
 
@@ -113,14 +113,16 @@ Se probaron **17 fotos** de Pexels que cubren distintos casos: de frente, de esp
 
 ## Límites conocidos
 
-- **El cumplimiento sale más alto que el real.** El modelo casi nunca usa la clase "sin casco": confunde gorras, pañuelos y cabezas descubiertas con cascos. Por eso la app avisa que hay que revisar la foto.
-- **Ningún tamaño de análisis es mejor en todo.** Con 1280 se ven mejor las personas lejanas y las cabezas sin casco, pero el modelo falla con cascos muy grandes y agrega cajas de más.
+- **El cumplimiento sale más alto que el real.** El modelo casi nunca usa la clase "sin casco": confunde gorras, pañuelos y cabezas descubiertas con cascos. Estos errores son del modelo: ninguna regla de posprocesamiento que se probó los separa de los cascos reales. Por eso:
+  - la app avisa que hay que revisar la foto;
+  - en la **versión web** se puede **tocar una caja para corregirla** (con casco → sin casco → descartada) y el cumplimiento se recalcula. Las cajas corregidas se marcan con ✎.
+- **Analizar dos veces es más lento:** el modo combinado tarda el doble. Si hace falta velocidad, se puede elegir 640.
 - **Datos de prueba:** se usaron fotos de bancos libres (Pexels), no fotos reales de obras argentinas.
 - **Modelo chico y sin mantenimiento:** es la versión *nano* de YOLOv8 y se publicó hace más de 3 años. Su precisión declarada (mAP50 = 0,836) la midió el propio autor.
 
 ## Trabajo futuro
 
-- Probar otros modelos o reentrenar con fotos de obras locales y con más ejemplos de cabezas sin casco.
+- **Cambiar o reentrenar el modelo:** es la única forma de corregir de raíz las gorras, los pañuelos y el casco en la mano. Primero hay que probar el modelo 2 del plan (`luisarizmendi/hardhat-or-hat`), que tiene la clase "gorra". Después, reentrenar con fotos de obras locales y más ejemplos de cabezas sin casco. Las correcciones manuales de la versión web podrían guardarse para usarlas como datos de entrenamiento.
 - Detectar chalecos reflectivos.
 - Generar un registro descargable (CSV) con fecha, obra y resultado.
 - Analizar video o la webcam en vivo.

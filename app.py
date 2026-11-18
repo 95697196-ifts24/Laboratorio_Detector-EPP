@@ -33,7 +33,11 @@ NOMBRES = {"Hardhat": "Con casco", "NO-Hardhat": "Sin casco"}
 COLORES = {"Hardhat": (0, 170, 0), "NO-Hardhat": (220, 0, 0)}  # verde y rojo (RGB)
 
 CONF_INICIAL = 0.25    # umbral de confianza (ver playground, Paso 4)
-IMGSZ_INICIAL = 1280   # tamaño de análisis (ver playground, Paso 6)
+# Tamaño de análisis (ver playground, Paso 6). "Combinado" analiza con 640 y con 1280
+# y une los resultados: fue la opción con menos errores en las 17 fotos de prueba.
+MODOS = ["640", "1280", "Combinado"]
+MODO_INICIAL = "Combinado"
+SUPERPOSICION_MAXIMA = 0.5  # si una caja queda más de 50 % dentro de otra, es la misma cabeza
 ANCHO_MAXIMO = 1600    # achicamos la foto marcada para que cargue rápido en el navegador
 
 
@@ -58,6 +62,35 @@ def leer_detecciones(resultado):
             "caja": caja.xyxy[0].int().tolist(),           # [x1, y1, x2, y2] en píxeles
         })
     return detecciones
+
+
+def superposicion(a, b):
+    """Qué fracción de la caja más chica queda dentro de la otra (0 = nada, 1 = toda)."""
+    ancho = min(a[2], b[2]) - max(a[0], b[0])
+    alto = min(a[3], b[3]) - max(a[1], b[1])
+    if ancho <= 0 or alto <= 0:
+        return 0.0
+    area = lambda c: (c[2] - c[0]) * (c[3] - c[1])
+    return ancho * alto / min(area(a), area(b))
+
+
+def quitar_repetidas(detecciones):
+    """Si dos cajas marcan la misma cabeza, deja solo la más segura."""
+    elegidas = []
+    for d in sorted(detecciones, key=lambda d: d["confianza"], reverse=True):
+        if all(superposicion(d["caja"], e["caja"]) <= SUPERPOSICION_MAXIMA for e in elegidas):
+            elegidas.append(d)
+    return elegidas
+
+
+def detectar(foto, conf, modo):
+    """Ejecuta el modelo con el tamaño elegido (o con los dos, en modo combinado)."""
+    tamanios = [640, 1280] if modo == "Combinado" else [int(modo)]
+    detecciones = []
+    for imgsz in tamanios:
+        resultado = modelo.predict(foto, conf=conf, imgsz=imgsz, verbose=False)[0]
+        detecciones += leer_detecciones(resultado)
+    return quitar_repetidas(detecciones)
 
 
 def contar(detecciones):
@@ -131,15 +164,14 @@ def escribir_resumen(conteo):
 # 5. Función principal: la que llama Gradio cada vez que se analiza una foto
 # ---------------------------------------------------------------------------
 
-def analizar(foto, conf, imgsz):
+def analizar(foto, conf, modo):
     if foto is None:
         return None, "Subí una foto para empezar."
 
     # Las fotos de celular guardan la rotación aparte (EXIF): la aplicamos
     foto = ImageOps.exif_transpose(foto).convert("RGB")
 
-    resultado = modelo.predict(foto, conf=conf, imgsz=int(imgsz), verbose=False)[0]
-    detecciones = leer_detecciones(resultado)
+    detecciones = detectar(foto, conf, modo)
 
     return dibujar(foto, detecciones), escribir_resumen(contar(detecciones))
 
@@ -161,9 +193,10 @@ with gr.Blocks(title="Detector de EPP") as app:
             conf = gr.Slider(0.05, 0.95, value=CONF_INICIAL, step=0.05,
                              label="Umbral de confianza",
                              info="Más bajo: encuentra más cabezas, pero con más errores.")
-            imgsz = gr.Radio([640, 1280], value=IMGSZ_INICIAL,
+            imgsz = gr.Radio(MODOS, value=MODO_INICIAL,
                              label="Tamaño de análisis (píxeles)",
-                             info="1280 ayuda con personas lejanas, pero es más lento.")
+                             info="1280 ayuda con personas lejanas. Combinado usa los dos "
+                                  "y es el más preciso, pero también el más lento.")
             boton = gr.Button("Analizar", variant="primary")
 
         with gr.Column():

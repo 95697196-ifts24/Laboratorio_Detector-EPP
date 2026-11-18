@@ -54,7 +54,9 @@
   }
   .ejemplos button:hover { border-color: var(--accent); }
   .ejemplos img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
-  #lienzo { width: 100%; height: auto; border-radius: 8px; display: none; background: var(--line); }
+  #lienzo { width: 100%; height: auto; border-radius: 8px; display: none; background: var(--line); cursor: pointer; }
+  .pista { display: none; margin: 0 0 10px; font-size: .9rem; color: var(--muted); }
+  .corregido { color: var(--muted); font-size: .9rem; }
   .vacio { color: var(--muted); text-align: center; padding: 80px 16px; }
   #estado { color: var(--muted); font-size: .9rem; min-height: 1.5em; margin: 10px 0 0; }
   .cumplimiento { font-size: 1.6rem; font-weight: 700; margin: 16px 0 8px; }
@@ -90,9 +92,10 @@
       <label class="titulo">Tamaño de análisis (píxeles)</label>
       <div class="radios">
         <label><input type="radio" name="imgsz" value="640"> 640</label>
-        <label><input type="radio" name="imgsz" value="1280" checked> 1280</label>
+        <label><input type="radio" name="imgsz" value="1280"> 1280</label>
+        <label><input type="radio" name="imgsz" value="Combinado" checked> Combinado</label>
       </div>
-      <p class="ayuda">1280 ayuda con personas lejanas, pero es más lento.</p>
+      <p class="ayuda">1280 ayuda con personas lejanas. Combinado usa los dos y es el más preciso, pero también el más lento.</p>
 
       <button id="analizar" disabled>Analizar</button>
       <p id="estado">Cargando el modelo…</p>
@@ -104,6 +107,8 @@
     <!-- Columna derecha: resultado -->
     <section class="panel">
       <div class="vacio" id="vacio">El resultado aparece acá.</div>
+      <p class="pista" id="pista">✋ <strong>¿El modelo se equivocó?</strong> Tocá una caja para corregirla:
+        con casco → sin casco → descartada.</p>
       <canvas id="lienzo"></canvas>
       <div id="resumen"></div>
     </section>
@@ -125,7 +130,13 @@
 const CLASES  = ["Hardhat", "NO-Hardhat"];                       // orden del modelo
 const NOMBRES = { "Hardhat": "Con casco", "NO-Hardhat": "Sin casco" };
 const COLORES = { "Hardhat": "rgb(0,170,0)", "NO-Hardhat": "rgb(220,0,0)" };
+NOMBRES.descartada = "Descartada";
+COLORES.descartada = "rgb(120,120,120)";
+// Orden en que cambia una caja cuando el usuario la toca
+const SIGUIENTE = { "Hardhat": "NO-Hardhat", "NO-Hardhat": "descartada", "descartada": "Hardhat" };
 const IOU_NMS = 0.5;           // el mismo valor que usa Ultralytics para eliminar cajas repetidas
+const SUPERPOSICION_MAXIMA = 0.5;   // si una caja queda más de 50 % dentro de otra, es la misma cabeza
+const DESCARTADA = "descartada";    // estado de una caja que el usuario marcó como error
 const ANCHO_MAXIMO = 1600;     // tamaño máximo de la foto marcada en pantalla
 const EJEMPLOS = [
   ["obra-grupo.jpg",       "Caso ideal"],
@@ -138,6 +149,8 @@ const EJEMPLOS = [
 const $ = (id) => document.getElementById(id);
 let sesion = null;   // el modelo cargado
 let foto = null;     // la foto actual (ImageBitmap)
+let actuales = [];   // detecciones de la foto actual (el usuario puede corregirlas)
+let escalaActual = 1;
 
 // ---------------------------------------------------------------------------
 // 2. Cargar el modelo
@@ -218,14 +231,46 @@ function leerDetecciones(salida, conf, prep) {
   return elegidas;
 }
 
+// Qué fracción de la caja más chica queda dentro de la otra (igual que app.py)
+function superposicion(a, b) {
+  const ancho = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  const alto = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (ancho <= 0 || alto <= 0) return 0;
+  const area = (c) => (c[2] - c[0]) * (c[3] - c[1]);
+  return (ancho * alto) / Math.min(area(a), area(b));
+}
+
+// Si dos cajas marcan la misma cabeza, deja solo la más segura
+function quitarRepetidas(detecciones) {
+  const elegidas = [];
+  for (const d of [...detecciones].sort((a, b) => b.confianza - a.confianza)) {
+    if (elegidas.every((e) => superposicion(d.caja, e.caja) <= SUPERPOSICION_MAXIMA)) elegidas.push(d);
+  }
+  return elegidas;
+}
+
+// Ejecuta el modelo con el tamaño elegido (o con los dos, en modo combinado)
+async function detectar(img, conf, modo) {
+  const tamanios = modo === "Combinado" ? [640, 1280] : [parseInt(modo, 10)];
+  let detecciones = [];
+  for (const imgsz of tamanios) {
+    const prep = preparar(img, imgsz);
+    const salida = (await sesion.run({ images: prep.tensor })).output0;
+    detecciones = detecciones.concat(leerDetecciones(salida, conf, prep));
+  }
+  return quitarRepetidas(detecciones);
+}
+
 // ---------------------------------------------------------------------------
 // 5. Lógica propia: contar y calcular el cumplimiento (igual que app.py)
+//    Las cajas que el usuario descartó no se cuentan.
 // ---------------------------------------------------------------------------
 function contar(detecciones) {
   const con = detecciones.filter((d) => d.clase === "Hardhat").length;
   const sin = detecciones.filter((d) => d.clase === "NO-Hardhat").length;
   const cabezas = con + sin;
-  return { cabezas, con, sin, cumplimiento: cabezas > 0 ? (con / cabezas) * 100 : null };
+  const corregidas = detecciones.filter((d) => d.clase !== d.original).length;
+  return { cabezas, con, sin, corregidas, cumplimiento: cabezas > 0 ? (con / cabezas) * 100 : null };
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +278,7 @@ function contar(detecciones) {
 // ---------------------------------------------------------------------------
 function dibujar(img, detecciones) {
   const escala = Math.min(1, ANCHO_MAXIMO / Math.max(img.width, img.height));
+  escalaActual = escala;
   const c = $("lienzo");
   c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
   const ctx = c.getContext("2d");
@@ -245,10 +291,13 @@ function dibujar(img, detecciones) {
 
   for (const d of detecciones) {
     const [x1, y1, x2, y2] = d.caja.map((z) => z * escala);
-    const texto = `${NOMBRES[d.clase]} ${Math.round(d.confianza * 100)}%`;
+    const corregida = d.clase !== d.original;
+    const texto = corregida ? `${NOMBRES[d.clase]} ✎` : `${NOMBRES[d.clase]} ${Math.round(d.confianza * 100)}%`;
     ctx.strokeStyle = ctx.fillStyle = COLORES[d.clase];
     ctx.lineWidth = grosor;
+    ctx.setLineDash(d.clase === DESCARTADA ? [grosor * 3, grosor * 2] : []);
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    ctx.setLineDash([]);
     const ancho = ctx.measureText(texto).width;
     const yTexto = Math.max(tamLetra + 4, y1);
     ctx.fillRect(x1 - grosor / 2, yTexto - tamLetra - 4, ancho + 10, tamLetra + 4);
@@ -256,6 +305,7 @@ function dibujar(img, detecciones) {
     ctx.fillText(texto, x1 + 4, yTexto - 1);
   }
   c.style.display = "block";
+  $("pista").style.display = detecciones.length ? "block" : "none";
   $("vacio").style.display = "none";
 }
 
@@ -268,6 +318,9 @@ function escribirResumen(cuenta) {
   let html = `<p class="cumplimiento">Cumplimiento: ${Math.round(cuenta.cumplimiento)} %</p>
     <table><tr><th>Cabezas detectadas</th><th>Con casco</th><th>Sin casco</th></tr>
     <tr><td>${cuenta.cabezas}</td><td class="ok">${cuenta.con}</td><td class="bad">${cuenta.sin}</td></tr></table>`;
+  if (cuenta.corregidas > 0) {
+    html += `<p class="corregido">✎ Incluye ${cuenta.corregidas} corrección(es) manual(es).</p>`;
+  }
   if (cuenta.sin > 0) {
     html += `<p class="bad"><strong>⚠️ Hay ${cuenta.sin} persona(s) sin casco.</strong> Están marcadas en rojo.</p>`;
   }
@@ -283,22 +336,38 @@ function escribirResumen(cuenta) {
 async function analizar() {
   if (!sesion || !foto) return;
   const conf = parseFloat($("conf").value);
-  const imgsz = parseInt(document.querySelector("input[name=imgsz]:checked").value, 10);
+  const imgsz = document.querySelector("input[name=imgsz]:checked").value;   // "640", "1280" o "Combinado"
 
   $("analizar").disabled = true;
   $("estado").textContent = "Analizando…";
   await new Promise((r) => setTimeout(r, 30));   // deja que la pantalla muestre el mensaje
 
   const inicio = performance.now();
-  const prep = preparar(foto, imgsz);
-  const salida = (await sesion.run({ images: prep.tensor })).output0;
-  const detecciones = leerDetecciones(salida, conf, prep);
+  actuales = await detectar(foto, conf, imgsz);
+  for (const d of actuales) d.original = d.clase;   // para saber si el usuario la corrigió
 
-  dibujar(foto, detecciones);
-  escribirResumen(contar(detecciones));
+  dibujar(foto, actuales);
+  escribirResumen(contar(actuales));
   $("estado").textContent = `Listo en ${((performance.now() - inicio) / 1000).toFixed(1)} s.`;
   $("analizar").disabled = false;
-  window.ultimoResultado = detecciones;   // para pruebas automáticas
+  window.ultimoResultado = actuales;   // para pruebas automáticas
+}
+
+// Corrección manual: al tocar una caja cambia su estado y se recalcula el resumen
+function corregir(evento) {
+  const c = $("lienzo");
+  const rect = c.getBoundingClientRect();
+  // Del punto tocado en pantalla a coordenadas de la foto original
+  const x = ((evento.clientX - rect.left) * (c.width / rect.width)) / escalaActual;
+  const y = ((evento.clientY - rect.top) * (c.height / rect.height)) / escalaActual;
+  const tocadas = actuales.filter((d) => x >= d.caja[0] && x <= d.caja[2] && y >= d.caja[1] && y <= d.caja[3]);
+  if (!tocadas.length) return;
+  // Si hay cajas superpuestas, elegimos la más chica (la más precisa)
+  const area = (d) => (d.caja[2] - d.caja[0]) * (d.caja[3] - d.caja[1]);
+  const d = tocadas.reduce((a, b) => (area(b) < area(a) ? b : a));
+  d.clase = SIGUIENTE[d.clase];
+  dibujar(foto, actuales);
+  escribirResumen(contar(actuales));
 }
 
 async function usarFoto(blob) {
@@ -314,6 +383,7 @@ $("conf").addEventListener("input", (e) => {
   $("confValor").textContent = Number(e.target.value).toFixed(2).replace(".", ",");
 });
 $("analizar").addEventListener("click", analizar);
+$("lienzo").addEventListener("click", corregir);
 // Al soltar el control o cambiar el tamaño, se vuelve a analizar la foto actual
 $("conf").addEventListener("change", analizar);
 document.querySelectorAll("input[name=imgsz]").forEach((r) => r.addEventListener("change", analizar));

@@ -71,6 +71,7 @@ Se probaron 17 fotos de Pexels. El detalle está en `pruebas/fuentes.md`.
 7. **Gorras confundidas con cascos:** se confirma la sospecha del hallazgo 2. En una multitud, el modelo informa 88 % de cumplimiento cuando el real es menor a 50 %.
 8. **Casco en la mano contado como "con casco":** el modelo detecta el objeto, no si la persona lo tiene puesto.
 9. **1280 detecta más cabezas sin casco** (4 contra 2). Esto respalda la decisión 9.
+10. **Combinar 640 y 1280 da el mejor resultado** (18/11/2026): conteo exacto en 10 de 17 fotos y error total 24, contra 26 con 1280 solo. Se probaron también "quedarse solo con lo que detectan ambos tamaños" (peor: 7 de 17) y reglas geométricas (proporción y tamaño de la caja), que no separan las gorras ni el casco en la mano de los cascos reales.
 
 ## 4. Cómo construir la primera versión mínima (MVP)
 
@@ -123,6 +124,8 @@ Entre 15 y 20 fotos de **Pexels o Unsplash** (licencia libre), registrando la fu
 | 10 | Umbral de confianza ajustable en la app (inicial 0,25) | No hay un valor que funcione bien en todas las fotos |
 | 11 | La app muestra un aviso de que el resultado puede fallar | El modelo da falsos "con casco" (hallazgo 5): el encargado debe revisar la foto |
 | 12 | Script `evaluar.py` para la fase 6 | Analiza todas las fotos de prueba de una vez y arma la tabla de resultados |
+| 14 | Modo **combinado** (640 + 1280) por defecto, con eliminación de cajas repetidas | Fue la estrategia con menos errores en las 17 fotos (hallazgo 10) |
+| 15 | Corrección manual en la versión web: tocar una caja la cambia a "sin casco" o "descartada" | Los errores que quedan (gorras, pañuelos, casco en la mano) son del modelo y no se pueden corregir con reglas. El encargado revisa y corrige, y el cumplimiento se recalcula |
 | 13 | Publicar una versión web estática (ONNX en el navegador) en lugar de la app de Gradio | Hugging Face exige PRO para Spaces con Gradio. El Space estático es gratis y, además, las fotos no salen de la computadora del usuario |
 
 ## 8. Registro de problemas y soluciones
