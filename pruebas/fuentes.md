@@ -36,6 +36,19 @@ Los conteos marcados con "≈" son aproximados: en las multitudes hay cabezas ta
 
 ## Resumen
 
+### Modelo Preciso (luisarizmendi/hardhat-or-hat v1, YOLO11x), agregado el 18/11/2026
+
+| | Preciso, 640 (app.py) | Preciso comprimido int8 (versión web) |
+|---|:---:|:---:|
+| Fotos con conteo exacto | **10 de 17** | 10 de 17 |
+| Error total del conteo | **11** | 15 |
+
+Resultados por foto con el modelo Preciso, 640 (C/S): foto1 4/0 ✅ · foto2 5/1 · akoonie 1/0 ✅ · cmrcn 1/0 ✅ · cristian 1/0 ✅ · dongfang 1/1 ✅ · doruk 3/0 · erik 0/0 · hanna 1/0 ✅ · imamuddin 4/0 · jerome 2/0 · kalz 1/1 ✅ · karanwang 3/0 ✅ · madknoxx 1/0 ✅ · ozkanoztas 9/9 · safari 1/0 ✅ · wal 3/0.
+
+Corrige los errores principales del modelo Rápido: en la foto 2 detecta al hombre de anteojos sin casco (el pañuelo no lo marca); en la foto 6 no cuenta el casco en la mano; en la foto 15 marca las gorras y las cabezas descubiertas como "sin casco" (50 % de cumplimiento, real ≈ 47 %). Sigue perdiendo cascos tapados (fotos 10 y 11) y el visto desde arriba (foto 8).
+
+### Modelo Rápido (keremberke, YOLOv8n): la tabla de arriba
+
 | | `imgsz=640` | `imgsz=1280` | Combinado (640 + 1280) |
 |---|:---:|:---:|:---:|
 | Fotos con conteo exacto | 8 de 17 | 8 de 17 | **10 de 17** |

@@ -26,38 +26,54 @@ from ultralytics import YOLO
 # 1. Configuración
 # ---------------------------------------------------------------------------
 
-REPO_MODELO = "keremberke/yolov8n-hard-hat-detection"
+# Dos modelos (PLAN.md, sección 3 bis). "modo" es el tamaño de análisis con el que
+# cada uno tuvo menos errores en las 17 fotos de prueba (pruebas/fuentes.md).
+MODELOS = {
+    "Preciso": {   # YOLO11x, 114 MB: distingue gorras y cabezas descubiertas de los cascos
+        "repo": "luisarizmendi/hardhat-or-hat", "archivo": "v1/model/pytorch/best.pt", "modo": "640",
+    },
+    "Rápido": {    # YOLOv8n, 6 MB: más liviano, pero confunde gorras y pañuelos con cascos
+        "repo": "keremberke/yolov8n-hard-hat-detection", "archivo": "best.pt", "modo": "Combinado",
+    },
+}
+MODELO_INICIAL = "Preciso"
 
-# Traducimos las clases del modelo (definidas por quienes etiquetaron el dataset)
+# Cada modelo nombra sus clases a su manera: las llevamos a un nombre común
+CLASE_COMUN = {"Hardhat": "Hardhat", "helmet": "Hardhat", "NO-Hardhat": "NO-Hardhat", "no_helmet": "NO-Hardhat"}
+
+# Traducimos las clases (definidas por quienes etiquetaron cada dataset)
 NOMBRES = {"Hardhat": "Con casco", "NO-Hardhat": "Sin casco"}
 COLORES = {"Hardhat": (0, 170, 0), "NO-Hardhat": (220, 0, 0)}  # verde y rojo (RGB)
 
 CONF_INICIAL = 0.25    # umbral de confianza (ver playground, Paso 4)
 # Tamaño de análisis (ver playground, Paso 6). "Combinado" analiza con 640 y con 1280
-# y une los resultados: fue la opción con menos errores en las 17 fotos de prueba.
+# y une los resultados.
 MODOS = ["640", "1280", "Combinado"]
-MODO_INICIAL = "Combinado"
+MODO_INICIAL = MODELOS[MODELO_INICIAL]["modo"]
 SUPERPOSICION_MAXIMA = 0.5  # si una caja queda más de 50 % dentro de otra, es la misma cabeza
 ANCHO_MAXIMO = 1600    # achicamos la foto marcada para que cargue rápido en el navegador
 
 
 # ---------------------------------------------------------------------------
-# 2. Cargar el modelo (una sola vez, al iniciar la app)
+# 2. Cargar los modelos (una sola vez, al iniciar la app)
 # ---------------------------------------------------------------------------
 
-modelo = YOLO(hf_hub_download(repo_id=REPO_MODELO, filename="best.pt"))
+modelos = {
+    nombre: YOLO(hf_hub_download(repo_id=m["repo"], filename=m["archivo"]))
+    for nombre, m in MODELOS.items()
+}
 
 
 # ---------------------------------------------------------------------------
 # 3. Lógica propia: de la salida del modelo a información útil
 # ---------------------------------------------------------------------------
 
-def leer_detecciones(resultado):
+def leer_detecciones(resultado, modelo):
     """Pasa la respuesta de YOLO a una lista simple de diccionarios."""
     detecciones = []
     for caja in resultado.boxes:
         detecciones.append({
-            "clase": modelo.names[int(caja.cls)],         # "Hardhat" o "NO-Hardhat"
+            "clase": CLASE_COMUN[modelo.names[int(caja.cls)]],  # "Hardhat" o "NO-Hardhat"
             "confianza": float(caja.conf),                 # entre 0 y 1
             "caja": caja.xyxy[0].int().tolist(),           # [x1, y1, x2, y2] en píxeles
         })
@@ -83,13 +99,14 @@ def quitar_repetidas(detecciones):
     return elegidas
 
 
-def detectar(foto, conf, modo):
+def detectar(foto, conf, modo, nombre_modelo=MODELO_INICIAL):
     """Ejecuta el modelo con el tamaño elegido (o con los dos, en modo combinado)."""
+    modelo = modelos[nombre_modelo]
     tamanios = [640, 1280] if modo == "Combinado" else [int(modo)]
     detecciones = []
     for imgsz in tamanios:
         resultado = modelo.predict(foto, conf=conf, imgsz=imgsz, verbose=False)[0]
-        detecciones += leer_detecciones(resultado)
+        detecciones += leer_detecciones(resultado, modelo)
     return quitar_repetidas(detecciones)
 
 
@@ -164,14 +181,14 @@ def escribir_resumen(conteo):
 # 5. Función principal: la que llama Gradio cada vez que se analiza una foto
 # ---------------------------------------------------------------------------
 
-def analizar(foto, conf, modo):
+def analizar(foto, conf, modo, nombre_modelo=MODELO_INICIAL):
     if foto is None:
         return None, "Subí una foto para empezar."
 
     # Las fotos de celular guardan la rotación aparte (EXIF): la aplicamos
     foto = ImageOps.exif_transpose(foto).convert("RGB")
 
-    detecciones = detectar(foto, conf, modo)
+    detecciones = detectar(foto, conf, modo, nombre_modelo)
 
     return dibujar(foto, detecciones), escribir_resumen(contar(detecciones))
 
@@ -193,6 +210,9 @@ with gr.Blocks(title="Detector de EPP") as app:
             conf = gr.Slider(0.05, 0.95, value=CONF_INICIAL, step=0.05,
                              label="Umbral de confianza",
                              info="Más bajo: encuentra más cabezas, pero con más errores.")
+            modelo = gr.Radio(list(MODELOS), value=MODELO_INICIAL, label="Modelo",
+                              info="Preciso distingue gorras y cabezas descubiertas de los cascos. "
+                                   "Rápido es más liviano, pero las confunde con cascos.")
             imgsz = gr.Radio(MODOS, value=MODO_INICIAL,
                              label="Tamaño de análisis (píxeles)",
                              info="1280 ayuda con personas lejanas. Combinado usa los dos "
@@ -218,11 +238,15 @@ with gr.Blocks(title="Detector de EPP") as app:
         "---\n"
         "Hecho por **José J. Navas A.** · Laboratorio Práctico · "
         "Técnicas de Procesamiento Digital de Imágenes · IFTS N.º 24 · 2026 · "
-        "Modelo: [keremberke/yolov8n-hard-hat-detection]"
-        "(https://huggingface.co/keremberke/yolov8n-hard-hat-detection)"
+        "Modelos: Preciso, [luisarizmendi/hardhat-or-hat]"
+        "(https://huggingface.co/luisarizmendi/hardhat-or-hat) (YOLO11x); "
+        "Rápido, [keremberke/yolov8n-hard-hat-detection]"
+        "(https://huggingface.co/keremberke/yolov8n-hard-hat-detection) (YOLOv8n)"
     )
 
-    boton.click(analizar, inputs=[entrada, conf, imgsz], outputs=[salida_foto, salida_resumen])
+    # Al cambiar de modelo, se elige el tamaño de análisis que mejor le funciona
+    modelo.change(lambda m: MODELOS[m]["modo"], inputs=modelo, outputs=imgsz)
+    boton.click(analizar, inputs=[entrada, conf, imgsz, modelo], outputs=[salida_foto, salida_resumen])
 
 
 if __name__ == "__main__":

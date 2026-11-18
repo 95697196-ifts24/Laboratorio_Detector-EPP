@@ -89,6 +89,14 @@
       <input type="range" id="conf" min="0.05" max="0.95" step="0.05" value="0.25">
       <p class="ayuda">Más bajo: encuentra más cabezas, pero con más errores.</p>
 
+      <label class="titulo">Modelo</label>
+      <div class="radios">
+        <label><input type="radio" name="modelo" value="preciso" checked> Preciso</label>
+        <label><input type="radio" name="modelo" value="rapido"> Rápido</label>
+      </div>
+      <p class="ayuda"><strong>Preciso</strong> distingue gorras y cabezas descubiertas de los cascos (58 MB, se descarga una sola vez).
+        <strong>Rápido</strong> pesa 13 MB, pero confunde gorras y pañuelos con cascos.</p>
+
       <label class="titulo">Tamaño de análisis (píxeles)</label>
       <div class="radios">
         <label><input type="radio" name="imgsz" value="640"> 640</label>
@@ -116,7 +124,8 @@
 
   <footer>
     Hecho por <strong>José J. Navas A.</strong> · Laboratorio Práctico · Técnicas de Procesamiento Digital de Imágenes · IFTS N.º 24 · 2026<br>
-    Modelo: <a href="https://huggingface.co/keremberke/yolov8n-hard-hat-detection">keremberke/yolov8n-hard-hat-detection</a> (YOLOv8 nano, convertido a ONNX) ·
+    Modelos: Preciso, <a href="https://huggingface.co/luisarizmendi/hardhat-or-hat">luisarizmendi/hardhat-or-hat</a> (YOLO11x, comprimido a int8);
+    Rápido, <a href="https://huggingface.co/keremberke/yolov8n-hard-hat-detection">keremberke/yolov8n-hard-hat-detection</a> (YOLOv8 nano). Ambos convertidos a ONNX ·
     Código y pruebas: <a href="https://github.com/95697196-ifts24/Laboratorio_Detector-EPP">GitHub</a> ·
     Fotos de ejemplo: <a href="https://www.pexels.com/">Pexels</a>
   </footer>
@@ -147,7 +156,15 @@ const EJEMPLOS = [
 ];
 
 const $ = (id) => document.getElementById(id);
-let sesion = null;   // el modelo cargado
+// Los dos modelos tienen las mismas clases y en el mismo orden: 0 = con casco, 1 = sin casco.
+// "modo" es el tamaño de análisis con el que cada uno tuvo menos errores en las 17 fotos de prueba.
+const MODELOS = {
+  preciso: { archivo: "modelo_preciso.onnx", peso: "58 MB", modo: "640" },        // YOLO11x, comprimido a int8
+  rapido:  { archivo: "modelo.onnx",         peso: "13 MB", modo: "Combinado" },  // YOLOv8n
+};
+
+const sesiones = {}; // modelos ya cargados (se descargan una sola vez)
+let sesion = null;   // el modelo en uso
 let foto = null;     // la foto actual (ImageBitmap)
 let actuales = [];   // detecciones de la foto actual (el usuario puede corregirlas)
 let escalaActual = 1;
@@ -155,15 +172,26 @@ let escalaActual = 1;
 // ---------------------------------------------------------------------------
 // 2. Cargar el modelo
 // ---------------------------------------------------------------------------
-async function cargarModelo() {
+async function cargarModelo(clave) {
+  const m = MODELOS[clave];
+  // Cada modelo funciona mejor con un tamaño de análisis distinto
+  document.querySelector(`input[name=imgsz][value="${m.modo}"]`).checked = true;
   try {
-    sesion = await ort.InferenceSession.create("modelo.onnx", { executionProviders: ["wasm"] });
+    if (!sesiones[clave]) {
+      sesion = null;
+      $("analizar").disabled = true;
+      $("estado").textContent = `Descargando el modelo (${m.peso}). La primera vez puede tardar…`;
+      sesiones[clave] = await ort.InferenceSession.create(m.archivo, { executionProviders: ["wasm"] });
+    }
+    sesion = sesiones[clave];
     $("estado").textContent = "Modelo listo. Elegí una foto.";
     if (foto) $("analizar").disabled = false;
   } catch (e) {
     $("estado").textContent = "No se pudo cargar el modelo: " + e.message;
   }
 }
+
+const modeloElegido = () => document.querySelector("input[name=modelo]:checked").value;
 
 // ---------------------------------------------------------------------------
 // 3. Preprocesar: achicar la foto como lo hace YOLO (letterbox)
@@ -387,6 +415,10 @@ $("lienzo").addEventListener("click", corregir);
 // Al soltar el control o cambiar el tamaño, se vuelve a analizar la foto actual
 $("conf").addEventListener("change", analizar);
 document.querySelectorAll("input[name=imgsz]").forEach((r) => r.addEventListener("change", analizar));
+document.querySelectorAll("input[name=modelo]").forEach((r) => r.addEventListener("change", async () => {
+  await cargarModelo(modeloElegido());
+  analizar();
+}));
 $("archivo").addEventListener("change", (e) => { if (e.target.files[0]) usarFoto(e.target.files[0]); });
 
 const zona = $("zona");
@@ -404,9 +436,13 @@ for (const [archivo, nombre] of EJEMPLOS) {
   $("ejemplos").appendChild(b);
 }
 
-// Prueba automática: index.html?ejemplo=obra-grupo.jpg analiza esa foto al abrir
-cargarModelo().then(async () => {
-  const ej = new URLSearchParams(location.search).get("ejemplo");
+// Prueba automática: index.html?ejemplo=obra-grupo.jpg&modelo=rapido analiza esa foto al abrir
+const parametros = new URLSearchParams(location.search);
+if (MODELOS[parametros.get("modelo")]) {
+  document.querySelector(`input[name=modelo][value="${parametros.get("modelo")}"]`).checked = true;
+}
+cargarModelo(modeloElegido()).then(async () => {
+  const ej = parametros.get("ejemplo");
   if (ej) await usarFoto(await (await fetch("ejemplos/" + ej)).blob());
 });
 </script>

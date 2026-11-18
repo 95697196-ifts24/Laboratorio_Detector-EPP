@@ -72,6 +72,8 @@ Se probaron 17 fotos de Pexels. El detalle está en `pruebas/fuentes.md`.
 8. **Casco en la mano contado como "con casco":** el modelo detecta el objeto, no si la persona lo tiene puesto.
 9. **1280 detecta más cabezas sin casco** (4 contra 2). Esto respalda la decisión 9.
 10. **Combinar 640 y 1280 da el mejor resultado** (18/11/2026): conteo exacto en 10 de 17 fotos y error total 24, contra 26 con 1280 solo. Se probaron también "quedarse solo con lo que detectan ambos tamaños" (peor: 7 de 17) y reglas geométricas (proporción y tamaño de la caja), que no separan las gorras ni el casco en la mano de los cascos reales.
+11. **El modelo 2 (`luisarizmendi/hardhat-or-hat` v1, YOLO11x) es mucho mejor** (18/11/2026): error total 11 contra 24, con 10 de 17 fotos exactas. Reconoce gorras, pañuelos y cabezas descubiertas como "sin casco" y no cuenta el casco en la mano. En la multitud calcula 50 % de cumplimiento (real ≈ 47 %), contra 82 % del modelo 1. Su mejor tamaño es 640: con 1280 o combinado empeora (error 23 y 14). La v2 del mismo repositorio, que agrega la clase `hat`, dio peor resultado (error 17).
+12. **Para la web, el modelo 2 se comprime a int8** (228 MB → 58 MB). Pierde algo de precisión (error 15 en lugar de 11): por ejemplo, ya no detecta al hombre de anteojos sin casco de la foto 2.
 
 ## 4. Cómo construir la primera versión mínima (MVP)
 
@@ -126,6 +128,8 @@ Entre 15 y 20 fotos de **Pexels o Unsplash** (licencia libre), registrando la fu
 | 12 | Script `evaluar.py` para la fase 6 | Analiza todas las fotos de prueba de una vez y arma la tabla de resultados |
 | 14 | Modo **combinado** (640 + 1280) por defecto, con eliminación de cajas repetidas | Fue la estrategia con menos errores en las 17 fotos (hallazgo 10) |
 | 15 | Corrección manual en la versión web: tocar una caja la cambia a "sin casco" o "descartada" | Los errores que quedan (gorras, pañuelos, casco en la mano) son del modelo y no se pueden corregir con reglas. El encargado revisa y corrige, y el cumplimiento se recalcula |
+| 16 | **Modelo 2 como principal ("Preciso")** y modelo 1 como alternativa ("Rápido"). Cambia la decisión 6 | El modelo 2 redujo el error a menos de la mitad (hallazgo 11). El modelo 1 queda por ser 20 veces más liviano |
+| 17 | Modelo 2 comprimido a int8 en la versión web | 228 MB es demasiado para una página. A 58 MB se descarga una sola vez y mantiene la mayor parte de la mejora (hallazgo 12) |
 | 13 | Publicar una versión web estática (ONNX en el navegador) en lugar de la app de Gradio | Hugging Face exige PRO para Spaces con Gradio. El Space estático es gratis y, además, las fotos no salen de la computadora del usuario |
 
 ## 8. Registro de problemas y soluciones
